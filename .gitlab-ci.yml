@@ -1,0 +1,49 @@
+stages:
+  - compile
+  - test
+  - build
+
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+  DOCKER_IMAGE: "$CI_REGISTRY/$CI_PROJECT_PATH:latest"
+  CI_REGISTRY: "registry.gitlab.com"
+  CI_REGISTRY_USER: "$CI_REGISTRY_USER"
+  CI_REGISTRY_PASSWORD: "$CI_REGISTRY_PASSWORD"
+  
+
+compile:
+  image: maven:3.8.5-openjdk-18
+  stage: compile
+  before_script:
+    - echo "Using Maven version:"
+    - mvn -version
+    - echo "Using Java version:"
+    - java -version
+  script:
+    - mvn clean package -Dcheckstyle.skip=true
+    - ls -la target
+  artifacts: 
+    paths:
+      - target/*.jar
+
+test:
+  image: maven:3.8.5-openjdk-18
+  stage: test
+  script:
+    - mvn test -Dcheckstyle.skip=true
+  dependencies:
+    - compile
+
+build:
+  image: docker:latest
+  stage: build
+  services:
+    - docker:dind
+  script:
+    - ls -la target
+    - docker build -t $DOCKER_IMAGE .
+    - docker images
+    - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u "$CI_REGISTRY_USER" --password-stdin
+    - docker push $DOCKER_IMAGE
+  dependencies:
+    - compile
